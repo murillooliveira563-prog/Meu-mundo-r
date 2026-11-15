@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8f6fb">
+  <meta name="description" content="Um espaço pessoal e delicado para organizar seus dias.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Meu Mundo R</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#hoje" aria-label="Meu Mundo R, início">
+        <span class="brand-mark" aria-hidden="true">R</span>
+        <span>meu mundo <strong>R</strong></span>
+      </a>
+      <button class="today-shortcut" id="todayShortcut" type="button" aria-label="Ir para hoje">
+        <span class="today-shortcut-icon" aria-hidden="true">✦</span>
+        <span>um cantinho seu</span>
+      </button>
+    </header>
+
+    <main id="mainContent" tabindex="-1">
+      <section class="view active" id="view-hoje" aria-labelledby="pageTitle">
+        <div class="welcome-panel">
+          <div class="welcome-copy">
+            <p class="eyebrow" id="todayDate"></p>
+            <h1 id="pageTitle"></h1>
+            <p class="welcome-subtitle">Um passo de cada vez. Seu dia, do seu jeito.</p>
+          </div>
+          <div class="welcome-art" aria-hidden="true">
+            <span class="art-sparkle sparkle-one">✦</span>
+            <span class="art-sparkle sparkle-two">✧</span>
+            <span class="art-flower">✿</span>
+          </div>
+        </div>
+        <section class="section-block" aria-labelledby="todayTasksTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">SEU DIA</p>
+              <h2 id="todayTasksTitle">Para hoje</h2>
+            </div>
+            <button class="text-button" type="button" data-add-today>+ Adicionar</button>
+          </div>
+          <div id="todayItems" class="item-list"></div>
+        </section>
+        <section class="section-block upcoming-block" aria-labelledby="upcomingTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LOGO MAIS</p>
+              <h2 id="upcomingTitle">Próximos compromissos</h2>
+            </div>
+            <button class="text-button" type="button" data-go="agenda">Ver agenda</button>
+          </div>
+          <div id="upcomingItems" class="item-list"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-agenda" aria-labelledby="agendaTitle" hidden>
+        <div class="page-heading">
+          <p class="eyebrow">SEUS PLANOS, NO SEU TEMPO</p>
+          <h1 id="agendaTitle">Agenda</h1>
+          <p>Um olhar gentil para os seus dias.</p>
+        </div>
+        <section class="calendar-card" aria-label="Calendário mensal">
+          <div class="calendar-toolbar">
+            <button class="icon-button" id="previousMonth" type="button" aria-label="Mês anterior">‹</button>
+            <h2 id="monthLabel" aria-live="polite"></h2>
+            <button class="icon-button" id="nextMonth" type="button" aria-label="Próximo mês">›</button>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid" role="group" aria-label="Dias do mês"></div>
+        </section>
+        <section class="section-block selected-day-block" aria-labelledby="selectedDayTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">DIA SELECIONADO</p>
+              <h2 id="selectedDayTitle"></h2>
+            </div>
+            <button class="text-button" id="addCalendarItem" type="button">+ Adicionar</button>
+          </div>
+          <div id="calendarItems" class="item-list"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-ciclo" aria-labelledby="cycleTitle" hidden>
+        <div class="page-heading">
+          <p class="eyebrow">CUIDADO COM VOCÊ</p>
+          <h1 id="cycleTitle">Meu ciclo</h1>
+          <p>Um registro pessoal, feito no seu ritmo e só para você.</p>
+        </div>
+        <section class="gentle-card cycle-intro">
+          <span class="cycle-flower" aria-hidden="true">✿</span>
+          <div><h2>Seu histórico, sem previsões</h2><p>Você escolhe o que registrar. Este espaço não calcula fases nem fertilidade.</p></div>
+        </section>
+        <section class="section-block">
+          <div class="section-heading">
+            <div><p class="eyebrow">SEUS REGISTROS</p><h2>Histórico</h2></div>
+            <button class="text-button" id="addCycle" type="button">+ Novo registro</button>
+          </div>
+          <div id="cycleItems" class="record-list"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-espaco" aria-labelledby="spaceTitle" hidden>
+        <div class="page-heading">
+          <p class="eyebrow">UM LUGAR SÓ SEU</p>
+          <h1 id="spaceTitle">Meu espaço</h1>
+          <p>Ideias, lembretes para si mesma e pequenos pensamentos.</p>
+        </div>
+        <section class="preference-card">
+          <div>
+            <p class="eyebrow">APARÊNCIA</p>
+            <h2>Seu clima preferido</h2>
+          </div>
+          <label class="theme-switch">
+            <span id="themeLabel">Tema claro</span>
+            <input id="themeToggle" type="checkbox" role="switch" aria-label="Ativar tema escuro">
+            <span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </section>
+        <section class="favorite-color-card" aria-labelledby="favoriteColorTitle">
+          <h2 id="favoriteColorTitle">Sua cor favorita</h2>
+          <fieldset class="accent-fieldset">
+            <legend>Cor de destaque do aplicativo</legend>
+            <div class="color-options">
+              <label class="color-option">
+                <input type="radio" name="accentColor" value="lilas">
+                <span class="color-dot lilas" aria-hidden="true"></span>
+                <span>Lilás</span>
+              </label>
+              <label class="color-option">
+                <input type="radio" name="accentColor" value="rosa">
+                <span class="color-dot rosa" aria-hidden="true"></span>
+                <span>Rosa</span>
+              </label>
+              <label class="color-option">
+                <input type="radio" name="accentColor" value="azul">
+                <span class="color-dot azul" aria-hidden="true"></span>
+                <span>Azul</span>
+              </label>
+              <label class="color-option">
+                <input type="radio" name="accentColor" value="verde">
+                <span class="color-dot verde" aria-hidden="true"></span>
+                <span>Verde</span>
+              </label>
+            </div>
+          </fieldset>
+        </section>
+        <section class="section-block">
+          <div class="section-heading">
+            <div><p class="eyebrow">PENSAMENTOS GUARDADOS</p><h2>Suas anotações</h2></div>
+            <button class="text-button" id="addNote" type="button">+ Nova anotação</button>
+          </div>
+          <div id="noteItems" class="notes-grid"></div>
+        </section>
+        <p class="privacy-note"><span aria-hidden="true">♡</span> Seus registros ficam neste navegador. Limpar os dados do navegador pode apagá-los; este espaço não é um backup.</p>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navegação principal">
+      <button class="nav-item active" type="button" data-view="hoje" aria-current="page">
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.8l8.5 6.7v9.2a.8.8 0 0 1-.8.8h-5.2v-6.2h-5v6.2H4.3a.8.8 0 0 1-.8-.8z"/></svg></span><span>Hoje</span>
+      </button>
+      <button class="nav-item" type="button" data-view="agenda">
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M7.5 3.5v4m9-4v4m-13 3h17"/></svg></span><span>Agenda</span>
+      </button>
+      <button class="nav-add" id="quickAdd" type="button" aria-label="Adicionar tarefa ou lembrete"><span>+</span></button>
+      <button class="nav-item" type="button" data-view="ciclo">
+        <span class="nav-icon nav-heart" aria-hidden="true">♡</span><span>Meu ciclo</span>
+      </button>
+      <button class="nav-item" type="button" data-view="espaco">
+        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18V6A1.5 1.5 0 0 1 5 4.5Z"/><path d="M8 9h8m-8 4h8m-8 4h5"/></svg></span><span>Meu espaço</span>
+      </button>
+    </nav>
+  </div>
+
+  <dialog id="appDialog" aria-labelledby="dialogTitle">
+    <form id="dialogForm" novalidate>
+      <div class="dialog-heading">
+        <div><p class="eyebrow" id="dialogEyebrow"></p><h2 id="dialogTitle"></h2></div>
+        <button class="icon-button dialog-close" type="button" data-close-dialog aria-label="Fechar">×</button>
+      </div>
+      <div id="dialogFields" class="dialog-fields"></div>
+      <div id="dialogMessage" class="form-message" role="alert" hidden></div>
+      <div class="dialog-actions" id="dialogActions"></div>
+    </form>
+  </dialog>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
