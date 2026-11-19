@@ -250,6 +250,21 @@
     return data;
   }
 
+  async function getPushFunctionErrorDiagnostic(error) {
+    const response = error && error.context;
+    if (!response || typeof response.clone !== "function" || !Number.isInteger(response.status)) return null;
+    const diagnostic = { httpStatus: response.status };
+    try {
+      const body = await response.clone().json();
+      if (typeof body?.error === "string" && /^[a-z0-9_]{1,64}$/.test(body.error)) {
+        diagnostic.responseError = body.error;
+      }
+    } catch {
+      diagnostic.responseError = "non_json_response";
+    }
+    return diagnostic;
+  }
+
   async function refreshNotificationStatus() {
     pushUi.active = false;
     if (!isPushConfigReady()) {
@@ -301,8 +316,11 @@
       pushUi.active = true;
       setNotificationState("enabled", "A inscrição deste dispositivo foi confirmada no Supabase.");
     } catch (error) {
-      console.error("Não foi possível verificar as notificações:", error);
-      setNotificationState("unconfigured", `Não foi possível confirmar a configuração do serviço: ${error.message || "erro de conexão"}`);
+      const diagnostic = await getPushFunctionErrorDiagnostic(error);
+      console.error("Não foi possível verificar as notificações:", diagnostic || { errorName: error?.name || "Error" });
+      setNotificationState("unconfigured", diagnostic
+        ? "Não foi possível confirmar a configuração do serviço de notificações. Tente novamente em alguns instantes."
+        : "Não foi possível confirmar a configuração das notificações. Verifique sua conexão e tente novamente.");
     }
   }
 
@@ -394,12 +412,15 @@
       pushUi.active = true;
       setNotificationState("enabled", "Inscrição salva e confirmada. Você já pode enviar uma notificação de teste.");
     } catch (error) {
-      console.error("Não foi possível ativar as notificações:", error);
+      const diagnostic = await getPushFunctionErrorDiagnostic(error);
+      console.error("Não foi possível ativar as notificações:", diagnostic || { errorName: error?.name || "Error" });
       const message = !navigator.onLine
         ? "Sem internet. Conecte-se e tente ativar novamente."
         : /anonymous/i.test(error.message || "")
           ? "Ative os logins anônimos em Authentication > Sign In / Providers no Supabase."
-          : `Não foi possível concluir a configuração: ${error.message || "erro de conexão"}`;
+          : diagnostic
+            ? "Não foi possível concluir a configuração das notificações agora. Tente novamente em alguns instantes."
+            : "Não foi possível concluir a configuração das notificações. Verifique sua conexão e tente novamente.";
       setNotificationState("unconfigured", message);
     } finally {
       pushUi.busy = false;
@@ -424,8 +445,11 @@
       if (!data || data.accepted < 1) throw new Error("O serviço não aceitou a notificação de teste.");
       $("#notificationHelp").textContent = "O serviço Web Push aceitou o aviso. A entrega ao dispositivo pode levar alguns instantes.";
     } catch (error) {
-      console.error("Não foi possível enviar a notificação de teste:", error);
-      $("#notificationHelp").textContent = `Não foi possível enviar o teste: ${error.message || "erro de conexão"}`;
+      const diagnostic = await getPushFunctionErrorDiagnostic(error);
+      console.error("Não foi possível enviar a notificação de teste:", diagnostic || { errorName: error?.name || "Error" });
+      $("#notificationHelp").textContent = diagnostic
+        ? "Não foi possível enviar o teste agora. Tente novamente em alguns instantes."
+        : "Não foi possível enviar o teste. Verifique sua conexão e tente novamente.";
     } finally {
       pushUi.busy = false;
       $("#sendTestNotification").disabled = !pushUi.active;
