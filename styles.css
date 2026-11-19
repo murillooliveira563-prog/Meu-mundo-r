@@ -134,6 +134,13 @@ h1, h2, p { margin-top: 0; }
 .theme-switch { min-height: 44px; display: flex; align-items: center; gap: 11px; color: var(--muted); font-size: 12px; cursor: pointer; }
 .favorite-color-card { display: grid; gap: 14px; margin-top: 16px; padding: 20px 21px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
 .favorite-color-card h2 { margin: 0; font: 400 18px Georgia, serif; }
+.notification-card { display: grid; gap: 12px; margin-top: 16px; padding: 20px 21px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.notification-card h2 { margin: 0; font: 400 18px Georgia, serif; }
+.notification-state { margin: 0; color: var(--lilac-dark); font-size: 15px; font-weight: 700; }
+.notification-state[data-state="blocked"] { color: #a3435b; }
+.notification-help { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.notification-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.notification-actions [hidden] { display: none; }
 .accent-fieldset { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .accent-fieldset legend { margin-bottom: 10px; color: var(--muted); font-size: 14px; }
 .theme-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }

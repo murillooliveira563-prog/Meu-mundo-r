@@ -153,6 +153,18 @@
             </div>
           </fieldset>
         </section>
+        <section class="notification-card" aria-labelledby="notificationTitle">
+          <div>
+            <p class="eyebrow">AVISOS NO SEU DISPOSITIVO</p>
+            <h2 id="notificationTitle">Notificações</h2>
+          </div>
+          <p class="notification-state" id="notificationStatus" data-state="unconfigured" role="status" aria-live="polite">Notificações não configuradas</p>
+          <p class="notification-help" id="notificationHelp">A configuração do serviço de notificações ainda não foi concluída.</p>
+          <div class="notification-actions">
+            <button class="button primary" id="enableNotifications" type="button" disabled>Ativar notificações</button>
+            <button class="button" id="sendTestNotification" type="button" hidden disabled>Enviar notificação de teste</button>
+          </div>
+        </section>
         <section class="section-block">
           <div class="section-heading">
             <div><p class="eyebrow">PENSAMENTOS GUARDADOS</p><h2>Suas anotações</h2></div>
@@ -193,6 +205,8 @@
     </form>
   </dialog>
 
+  <script src="vendor/supabase.js" defer></script>
+  <script src="supabase-config.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

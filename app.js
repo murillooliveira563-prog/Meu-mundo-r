@@ -11,6 +11,9 @@
   const fields = $("#dialogFields");
   const actions = $("#dialogActions");
   const formMessage = $("#dialogMessage");
+  const supabaseConfig = window.MEU_MUNDO_R_SUPABASE_CONFIG || {};
+  const pushUi = { busy: false, active: false };
+  let supabaseClient = null;
   const state = {
     db: null,
     tasks: [],
@@ -154,6 +157,278 @@
       await saveRecord("preferences", { key: "favoriteColor", value: color });
     } catch (error) {
       showToast(`Não foi possível salvar a cor favorita: ${error.message}`);
+    }
+  }
+
+  function decodeBase64Url(value) {
+    const standard = value.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = window.atob(standard.padEnd(Math.ceil(standard.length / 4) * 4, "="));
+    return Uint8Array.from(binary, character => character.charCodeAt(0));
+  }
+
+  function isPushConfigReady() {
+    if (!supabaseConfig.url || !supabaseConfig.publishableKey || !supabaseConfig.pushFunction || !supabaseConfig.vapidPublicKey) return false;
+    try {
+      const url = new URL(supabaseConfig.url);
+      const publicKey = decodeBase64Url(supabaseConfig.vapidPublicKey);
+      return url.protocol === "https:" && supabaseConfig.publishableKey.startsWith("sb_publishable_") && publicKey.length === 65 && publicKey[0] === 4;
+    } catch {
+      return false;
+    }
+  }
+
+  function getSupabaseClient() {
+    if (supabaseClient) return supabaseClient;
+    if (!window.supabase || typeof window.supabase.createClient !== "function") {
+      throw new Error("A biblioteca local do Supabase não foi carregada.");
+    }
+    supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.publishableKey, {
+      auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
+    });
+    return supabaseClient;
+  }
+
+  function isIOSDevice() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+
+  function isInstalledIOSApp() {
+    return navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  }
+
+  function iosInstallGuidance() {
+    return isIOSDevice() && !isInstalledIOSApp()
+      ? "No iPhone, adicione este app à Tela de Início pelo Safari e abra pelo ícone instalado para ativar Web Push."
+      : "";
+  }
+
+  function setNotificationState(status, message) {
+    const statusLabels = {
+      unconfigured: "Notificações não configuradas",
+      disabled: "Notificações desativadas",
+      enabled: "Notificações ativadas",
+      blocked: "Notificações bloqueadas"
+    };
+    const statusElement = $("#notificationStatus");
+    const enableButton = $("#enableNotifications");
+    const testButton = $("#sendTestNotification");
+    statusElement.dataset.state = status;
+    statusElement.textContent = statusLabels[status];
+    const iosGuidance = iosInstallGuidance();
+    $("#notificationHelp").textContent = [message, iosGuidance].filter(Boolean).join(" ");
+    enableButton.disabled = pushUi.busy || !isPushConfigReady() || status === "enabled" || status === "blocked";
+    testButton.hidden = status !== "enabled";
+    testButton.disabled = pushUi.busy || status !== "enabled";
+  }
+
+  function assertPushSupport() {
+    if (!window.isSecureContext) throw new Error("Notificações exigem uma conexão HTTPS segura.");
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      throw new Error("Este navegador não oferece suporte a notificações Web Push.");
+    }
+    if (!isPushConfigReady()) {
+      throw new Error("Notificações não configuradas: faltam a URL/chave pública do Supabase ou a chave pública VAPID.");
+    }
+  }
+
+  async function getOrCreateAnonymousSession(client) {
+    const { data: current, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (current.session) return current.session;
+    const { data, error } = await client.auth.signInAnonymously();
+    if (error) throw error;
+    if (!data.session || !data.user?.is_anonymous) {
+      throw new Error("O Supabase não retornou uma sessão anônima válida.");
+    }
+    return data.session;
+  }
+
+  async function getPushBackendStatus(client) {
+    const { data, error } = await client.functions.invoke(supabaseConfig.pushFunction, { body: { action: "status" } });
+    if (error) throw error;
+    if (!data || data.configured !== true) throw new Error("O backend ainda não tem as chaves VAPID e a tabela configuradas.");
+    return data;
+  }
+
+  async function refreshNotificationStatus() {
+    pushUi.active = false;
+    if (!isPushConfigReady()) {
+      setNotificationState("unconfigured", "Configure a chave pública VAPID e publique a migração e a Edge Function.");
+      return;
+    }
+    if (!window.isSecureContext || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setNotificationState("unconfigured", "Este navegador ou endereço não oferece suporte a Web Push.");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setNotificationState("blocked", "A permissão foi negada. Altere-a nas configurações de notificações do navegador ou do iPhone.");
+      return;
+    }
+    if (Notification.permission !== "granted") {
+      setNotificationState("disabled", "Ative para criar uma sessão anônima e salvar a inscrição neste dispositivo.");
+      return;
+    }
+    if (!navigator.onLine) {
+      setNotificationState("unconfigured", "Sem internet: não foi possível confirmar se a inscrição está salva no Supabase.");
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = registration ? await registration.pushManager.getSubscription() : null;
+      if (!subscription) {
+        setNotificationState("disabled", "Este dispositivo ainda não tem uma inscrição Web Push.");
+        return;
+      }
+      const client = getSupabaseClient();
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session) {
+        setNotificationState("disabled", "A inscrição local não está associada a uma sessão. Ative novamente para configurá-la.");
+        return;
+      }
+      const { data: saved, error: savedError } = await client
+        .from("push_subscriptions")
+        .select("endpoint,vapid_public_key")
+        .eq("endpoint", subscription.endpoint)
+        .maybeSingle();
+      if (savedError) throw savedError;
+      const backendStatus = await getPushBackendStatus(client);
+      if (!backendStatus.subscriptionSaved || !saved || saved.vapid_public_key !== supabaseConfig.vapidPublicKey) {
+        setNotificationState("disabled", "A inscrição não está salva com a configuração VAPID atual. Ative novamente para concluir.");
+        return;
+      }
+      pushUi.active = true;
+      setNotificationState("enabled", "A inscrição deste dispositivo foi confirmada no Supabase.");
+    } catch (error) {
+      console.error("Não foi possível verificar as notificações:", error);
+      setNotificationState("unconfigured", `Não foi possível confirmar a configuração do serviço: ${error.message || "erro de conexão"}`);
+    }
+  }
+
+  async function enableNotifications() {
+    if (pushUi.busy) return;
+    if (!isPushConfigReady()) {
+      setNotificationState("unconfigured", "Configure a chave pública VAPID no arquivo supabase-config.js antes de ativar.");
+      return;
+    }
+    if (!navigator.onLine) {
+      setNotificationState("disabled", "Conecte-se à internet para ativar notificações. As funções locais continuam disponíveis.");
+      return;
+    }
+    if (!window.isSecureContext || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setNotificationState("unconfigured", "Este navegador ou endereço não oferece suporte a Web Push.");
+      return;
+    }
+    if (isIOSDevice() && !isInstalledIOSApp()) {
+      setNotificationState("disabled", "No iPhone, adicione este app à Tela de Início pelo Safari e abra pelo ícone instalado.");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setNotificationState("blocked", "A permissão foi negada. Altere-a nas configurações de notificações do navegador ou do iPhone.");
+      return;
+    }
+
+    const permissionRequest = Notification.permission === "granted"
+      ? Promise.resolve("granted")
+      : Notification.requestPermission();
+    pushUi.busy = true;
+    setNotificationState("disabled", "Aguardando a permissão e configurando este dispositivo…");
+    try {
+      const permission = await permissionRequest;
+      if (permission !== "granted") {
+        if (permission === "denied") {
+          setNotificationState("blocked", "A permissão foi negada. Altere-a nas configurações de notificações do navegador ou do iPhone.");
+        } else {
+          setNotificationState("disabled", "A permissão não foi concedida. Você pode tentar novamente quando quiser.");
+        }
+        return;
+      }
+      if (!navigator.onLine) throw new Error("Sem internet. Conecte-se e tente ativar novamente.");
+
+      const client = getSupabaseClient();
+      const session = await getOrCreateAnonymousSession(client);
+      const registration = await navigator.serviceWorker.ready;
+      const applicationServerKey = decodeBase64Url(supabaseConfig.vapidPublicKey);
+      let subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        const existingKey = subscription.options.applicationServerKey;
+        const matches = existingKey && existingKey.byteLength === applicationServerKey.byteLength
+          && applicationServerKey.every((byte, index) => byte === new Uint8Array(existingKey)[index]);
+        if (!matches) {
+          const { error: deleteError } = await client.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+          if (deleteError) throw deleteError;
+          await subscription.unsubscribe();
+          subscription = null;
+        }
+      }
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        });
+      }
+      const serialized = subscription.toJSON();
+      if (!serialized.endpoint || !serialized.keys?.p256dh || !serialized.keys?.auth) {
+        throw new Error("O navegador não retornou uma inscrição Web Push completa.");
+      }
+      const { error: saveError } = await client.from("push_subscriptions").upsert({
+        user_id: session.user.id,
+        endpoint: serialized.endpoint,
+        p256dh: serialized.keys.p256dh,
+        auth_key: serialized.keys.auth,
+        vapid_public_key: supabaseConfig.vapidPublicKey
+      }, { onConflict: "user_id,endpoint" });
+      if (saveError) throw saveError;
+
+      const { data: saved, error: verifyError } = await client
+        .from("push_subscriptions")
+        .select("endpoint,vapid_public_key")
+        .eq("endpoint", serialized.endpoint)
+        .maybeSingle();
+      if (verifyError) throw verifyError;
+      const backendStatus = await getPushBackendStatus(client);
+      if (!saved || saved.vapid_public_key !== supabaseConfig.vapidPublicKey || backendStatus.subscriptionSaved !== true) {
+        throw new Error("O servidor não confirmou a configuração completa da inscrição.");
+      }
+      pushUi.active = true;
+      setNotificationState("enabled", "Inscrição salva e confirmada. Você já pode enviar uma notificação de teste.");
+    } catch (error) {
+      console.error("Não foi possível ativar as notificações:", error);
+      const message = !navigator.onLine
+        ? "Sem internet. Conecte-se e tente ativar novamente."
+        : /anonymous/i.test(error.message || "")
+          ? "Ative os logins anônimos em Authentication > Sign In / Providers no Supabase."
+          : `Não foi possível concluir a configuração: ${error.message || "erro de conexão"}`;
+      setNotificationState("unconfigured", message);
+    } finally {
+      pushUi.busy = false;
+      if (pushUi.active) setNotificationState("enabled", "Inscrição salva e confirmada. Você já pode enviar uma notificação de teste.");
+      else $("#enableNotifications").disabled = !isPushConfigReady() || $("#notificationStatus").dataset.state === "blocked";
+    }
+  }
+
+  async function sendTestNotification() {
+    if (!pushUi.active) return;
+    if (!navigator.onLine) {
+      $("#notificationHelp").textContent = "Sem internet. Conecte-se para enviar a notificação de teste.";
+      return;
+    }
+    pushUi.busy = true;
+    $("#sendTestNotification").disabled = true;
+    $("#notificationHelp").textContent = "Enviando o aviso de teste ao serviço Web Push…";
+    try {
+      const client = getSupabaseClient();
+      const { data, error } = await client.functions.invoke(supabaseConfig.pushFunction, { body: { action: "test" } });
+      if (error) throw error;
+      if (!data || data.accepted < 1) throw new Error("O serviço não aceitou a notificação de teste.");
+      $("#notificationHelp").textContent = "O serviço Web Push aceitou o aviso. A entrega ao dispositivo pode levar alguns instantes.";
+    } catch (error) {
+      console.error("Não foi possível enviar a notificação de teste:", error);
+      $("#notificationHelp").textContent = `Não foi possível enviar o teste: ${error.message || "erro de conexão"}`;
+    } finally {
+      pushUi.busy = false;
+      $("#sendTestNotification").disabled = !pushUi.active;
     }
   }
 
@@ -733,6 +1008,9 @@
     $("#addNote").addEventListener("click", () => openNoteForm());
     $("#themeToggle").addEventListener("change", event => changeTheme(event.target.checked));
     $$('input[name="accentColor"]').forEach(input => input.addEventListener("change", () => changeFavoriteColor(input.value)));
+    $("#enableNotifications").addEventListener("click", enableNotifications);
+    $("#sendTestNotification").addEventListener("click", sendTestNotification);
+    window.addEventListener("online", refreshNotificationStatus);
     $$("[data-close-dialog]").forEach(button => button.addEventListener("click", closeDialog));
     dialog.addEventListener("click", event => {
       if (event.target === dialog) closeDialog();
@@ -759,9 +1037,12 @@
       await loadData();
       renderAll();
       if ("serviceWorker" in navigator && window.isSecureContext) {
-        navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" }).catch(error => {
+        navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" }).then(() => refreshNotificationStatus()).catch(error => {
           console.error("Não foi possível preparar o uso offline:", error);
+          setNotificationState("unconfigured", "Não foi possível preparar o service worker necessário para notificações.");
         });
+      } else {
+        setNotificationState("unconfigured", "Notificações exigem HTTPS e suporte a service workers.");
       }
     } catch (error) {
       reportStorageError(error);

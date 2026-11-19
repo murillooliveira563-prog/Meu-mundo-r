@@ -1,11 +1,13 @@
 "use strict";
 
-const CACHE_NAME = "meu-mundo-r-v7";
+const CACHE_NAME = "meu-mundo-r-v10";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./supabase-config.js",
+  "./vendor/supabase.js",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./icons/favicon.svg",
@@ -48,4 +50,46 @@ self.addEventListener("fetch", event => {
     }
     return response;
   })));
+});
+
+self.addEventListener("push", event => {
+  const raw = event.data ? event.data.text() : "";
+  let payload = {};
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") payload = parsed;
+    } catch {
+      payload = { body: raw };
+    }
+  }
+  const title = typeof payload.title === "string" && payload.title.trim() ? payload.title : "Meu Mundo R";
+  const body = typeof payload.body === "string" ? payload.body : "Você recebeu um novo aviso.";
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: new URL("./icons/icon-192.png", self.registration.scope).href,
+    badge: new URL("./icons/icon-192.png", self.registration.scope).href,
+    data: { url: typeof payload.url === "string" ? payload.url : "./" }
+  }));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const scope = new URL(self.registration.scope);
+    const target = new URL(typeof event.notification.data?.url === "string" ? event.notification.data.url : "./", scope);
+    if (target.origin !== scope.origin || !target.pathname.startsWith(scope.pathname)) {
+      target.href = scope.href;
+    }
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const appWindow = windows.find(client => {
+      const url = new URL(client.url);
+      return url.origin === scope.origin && url.pathname.startsWith(scope.pathname);
+    });
+    if (appWindow) {
+      const targetWindow = appWindow.url === target.href ? appWindow : await appWindow.navigate(target.href);
+      return (targetWindow || appWindow).focus();
+    }
+    return self.clients.openWindow(target.href);
+  })());
 });
