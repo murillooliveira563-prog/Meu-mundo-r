@@ -206,7 +206,7 @@
     const statusLabels = {
       unconfigured: "Notificações não configuradas",
       disabled: "Notificações desativadas",
-      enabled: "Notificações ativadas",
+      enabled: "✓ Notificações ativadas neste dispositivo",
       blocked: "Notificações bloqueadas"
     };
     const statusElement = $("#notificationStatus");
@@ -216,6 +216,8 @@
     statusElement.textContent = statusLabels[status];
     const iosGuidance = iosInstallGuidance();
     $("#notificationHelp").textContent = [message, iosGuidance].filter(Boolean).join(" ");
+    enableButton.hidden = status === "enabled";
+    enableButton.textContent = pushUi.busy ? "Ativando…" : "Ativar notificações";
     enableButton.disabled = pushUi.busy || !isPushConfigReady() || status === "enabled" || status === "blocked";
     testButton.hidden = status !== "enabled";
     testButton.disabled = pushUi.busy || status !== "enabled";
@@ -425,7 +427,13 @@
     } finally {
       pushUi.busy = false;
       if (pushUi.active) setNotificationState("enabled", "Inscrição salva e confirmada. Você já pode enviar uma notificação de teste.");
-      else $("#enableNotifications").disabled = !isPushConfigReady() || $("#notificationStatus").dataset.state === "blocked";
+      else {
+        const status = $("#notificationStatus").dataset.state;
+        const enableButton = $("#enableNotifications");
+        enableButton.hidden = status === "enabled";
+        enableButton.textContent = "Ativar notificações";
+        enableButton.disabled = !isPushConfigReady() || status === "blocked";
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "meu-mundo-r-v11";
+const CACHE_NAME = "meu-mundo-r-v12";
 const APP_SHELL = [
   "./",
   "./index.html",
